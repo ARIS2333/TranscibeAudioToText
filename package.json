@@ -1,0 +1,25 @@
+{
+  "name": "speech-recognition-server",
+  "version": "1.0.0",
+  "description": "A speech recognition server using iFlytek's API with WebSocket",
+  "main": "sever.js",
+  "scripts": {
+    "start": "node sever.js",
+    "dev": "node sever.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "crypto-js": "^3.3.0",
+    "ws": "^7.5.10"
+  },
+  "keywords": [
+    "speech-recognition",
+    "websocket",
+    "iflytek",
+    "audio-processing"
+  ],
+  "author": "Developer",
+  "license": "MIT"
+}

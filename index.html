@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音识别演示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #recordButton.recording {
+            background-color: #f44336;
+        }
+        #recordButton.recording:hover {
+            background-color: #d32f2f;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            min-height: 100px;
+            text-align: left;
+            background-color: #f9f9f9;
+        }
+        .status {
+            font-style: italic;
+            color: #666;
+        }
+        .error {
+            color: #d32f2f;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .recording-status {
+            color: #f44336;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>语音识别演示</h1>
+        <p>点击下面的按钮开始录音，再次点击停止录音并进行语音识别</p>
+        
+        <button id="recordButton">开始录音</button>
+        <div id="result">
+            <p class="status">识别结果将显示在这里...</p>
+        </div>
+    </div>
+
+    <script>
+        // 音频相关变量
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        
+        // DOM元素
+        const recordButton = document.getElementById('recordButton');
+        const resultDiv = document.getElementById('result');
+        
+        // 请求麦克风权限并开始录音
+        recordButton.addEventListener('click', async () => {
+            if (!isRecording) {
+                // 开始录音
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 16000,  // 16kHz采样率
+                            channelCount: 1,    // 单声道
+                            echoCancellation: true
+                        }
+                    });
+                    
+                    // 设置录音参数以更好地匹配PCM格式
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        // 将录音数据转换为Blob
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        
+                        // 显示正在处理
+                        resultDiv.innerHTML = '<p class="status">正在识别中，请稍候...</p>';
+                        recordButton.disabled = true;
+                        
+                        // 发送到后端进行识别
+                        try {
+                            const formData = new FormData();
+                            formData.append('audio', audioBlob, 'recording.webm');
+                            
+                            const response = await fetch('/recognize', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            recordButton.disabled = false;
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                if (result.text) {
+                                    resultDiv.innerHTML = `<p class="success"><strong>识别结果:</strong> ${result.text}</p>`;
+                                } else {
+                                    resultDiv.innerHTML = `<p class="status">未识别到内容</p>`;
+                                }
+                            } else {
+                                const error = await response.json();
+                                resultDiv.innerHTML = `<p class="error">识别失败：${error.error}</p>`;
+                            }
+                        } catch (error) {
+                            console.error('识别错误:', error);
+                            recordButton.disabled = false;
+                            resultDiv.innerHTML = `<p class="error">网络错误，请检查连接：${error.message}</p>`;
+                        }
+                        
+                        // 停止所有音频轨道
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    mediaRecorder.start(1000); // 每秒触发一次dataavailable事件
+                    isRecording = true;
+                    recordButton.textContent = '停止录音';
+                    recordButton.classList.add('recording');
+                    resultDiv.innerHTML = '<p class="recording-status">正在录音...</p>';
+                } catch (error) {
+                    console.error('获取麦克风权限失败:', error);
+                    resultDiv.innerHTML = `<p class="error">无法访问麦克风，请检查权限设置：${error.message}</p>`;
+                }
+            } else {
+                // 停止录音
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                isRecording = false;
+                recordButton.textContent = '开始录音';
+                recordButton.classList.remove('recording');
+            }
+        });
+    </script>
+</body>
+</html>
